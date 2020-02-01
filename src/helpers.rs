@@ -2,7 +2,7 @@ use colored::Colorize;
 use futures::{stream, StreamExt};
 use miniserde::{json, Deserialize, Serialize};
 use regex::Regex;
-use reqwest::{Client, header::USER_AGENT};
+use reqwest::{header::USER_AGENT, Client};
 use semver;
 use term_table::{
     row::Row,
@@ -149,69 +149,42 @@ impl CratesInfoContainer {
 
         print!("{}", table.render());
     }
+
+    // pub(crate) async fn update_all_crates() -> Result<(), Box<dyn std::error::Error>> {
+    //     use tokio::process::Command;
+
+    //     let crates = check_for_updates(&get_crates_name_version()?).await;
+
+    //     for item in crates {
+    //         if item.3 == true {
+    //             let _ = Command::new("cargo")
+    //                 .args(&["install", "--force", format!("{}", item.0).as_str().trim()])
+    //                 .spawn()
+    //                 .expect("Failed to spawn `cargo` command.")
+    //                 .await;
+    //         }
+    //     }
+
+    //     /*
+    //     let upgradable = crates
+    //         .iter()
+    //         .filter(|item| item.3)
+    //         .map(|item| item.clone())
+    //         .collect::<CratesNameAndVersion>();
+
+    //     futures::stream::iter(upgradable.iter().map(|item| {
+    //         println!("updating item: {} ", item.0);
+
+    //         async move {
+    //             let _ = Command::new("cargo")
+    //                 .args(&["install", "--force", format!("{}", item.0).as_str().trim()])
+    //                 .spawn()
+    //                 .expect("Failed to spawn `cargo` command.")
+    //                 .await;
+    //         }
+    //     })).buffered(upgradable.len())
+    //         .collect::<()>().await;
+    //      */
+    //     Ok(())
+    // }
 }
-
-// pub(crate) async fn update_all_crates() -> Result<(), Box<dyn std::error::Error>> {
-//     use tokio::process::Command;
-
-//     let crates = check_for_updates(&get_crates_name_version()?).await;
-
-//     for item in crates {
-//         if item.3 == true {
-//             let _ = Command::new("cargo")
-//                 .args(&["install", "--force", format!("{}", item.0).as_str().trim()])
-//                 .spawn()
-//                 .expect("Failed to spawn `cargo` command.")
-//                 .await;
-//         }
-//     }
-
-//     /*
-//     let upgradable = crates
-//         .iter()
-//         .filter(|item| item.3)
-//         .map(|item| item.clone())
-//         .collect::<CratesNameAndVersion>();
-
-//     futures::stream::iter(upgradable.iter().map(|item| {
-//         println!("updating item: {} ", item.0);
-
-//         async move {
-//             let _ = Command::new("cargo")
-//                 .args(&["install", "--force", format!("{}", item.0).as_str().trim()])
-//                 .spawn()
-//                 .expect("Failed to spawn `cargo` command.")
-//                 .await;
-//         }
-//     })).buffered(upgradable.len())
-//         .collect::<()>().await;
-//      */
-//     Ok(())
-// }
-
-// #[allow(dead_code)]
-// pub(crate) fn progress_demo() {
-//     use pbr::ProgressBar;
-//     use std::thread;
-//     use std::time::Duration;
-
-//     let items = get_crates_name_version().unwrap();
-
-//     let mut pb = ProgressBar::new(items.len() as u64);
-
-//     pb.set_max_refresh_rate(Some(Duration::from_secs(1)));
-
-//     pb.show_tick = true;
-//     pb.show_speed = false;
-//     pb.show_percent = true;
-//     pb.show_counter = true;
-//     pb.show_time_left = true;
-
-//     for item in items {
-//         pb.message(format!("Downloading: {}", item.0).as_str());
-//         pb.inc();
-//         thread::sleep(Duration::from_millis(100));
-//     }
-
-//     pb.finish_print("Downloaded!");
-// }

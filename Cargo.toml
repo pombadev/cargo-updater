@@ -7,7 +7,7 @@ readme = "README.md"
 license-file = "LICENSE-MIT.md"
 homepage = "https://github.com/pjmp/cargo-global"
 repository = "https://github.com/pjmp/cargo-global"
-description = "A cargo subcommand for checking and updating executables installed in $CARGO_HOME/.bin"
+description = "A npm inspired cargo subcommand for checking and updating executables installed in $CARGO_HOME/.bin"
 keywords = ["cargo", "cargo-subcommand"]
 categories = ["command-line-interface", "command-line-utilities"]
 
@@ -18,10 +18,10 @@ clap = "2.33.0"
 colored = "1.9.2"
 regex = "1.3.3"
 term-table = "1.2.0"
-serde_json = "1.0.45"
-serde = { version = "1.0.104" , features = [ "derive"] }
 tokio = { version = "0.2", features = ["macros", "process"] }
 reqwest = { version = "0.10", features = ["json"] }
 futures = {version = "0.3", features = ["async-await"]}
 semver = "0.9.0"
 pbr = "1.0.2"
+miniserde = "0.1.12"
+

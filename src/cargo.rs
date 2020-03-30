@@ -9,8 +9,7 @@ use term_table::{
     table_cell::{Alignment, TableCell},
     Table, TableStyle,
 };
-use tokio::process::Command;
-// use std::io::BufRead;
+use std::process::Command;
 
 #[derive(Debug)]
 pub(crate) struct CrateInfo {
@@ -89,64 +88,29 @@ impl CratesInfoContainer {
 }
 
 pub(crate) async fn update_upgradable_crates() {
-    use tokio::io::{AsyncBufReadExt, BufReader};
-    // use indicatif::{ProgressBar, ProgressStyle};
-    // use std::sync::mpsc::channel;
-
     let container = check_for_updates().await;
-    let upgradable: Vec<&CrateInfo> = container
+
+    let upgradable: Vec<&str> = container
         .crates
         .iter()
         .filter(|item| item.is_upgradable())
+        .map(|item| item.name.as_str())
         .collect();
 
-    // let pb = ProgressBar::new_spinner();
+    let mut cmd = Command::new("cargo");
 
-    let tasks =
-        stream::iter(upgradable.iter()).for_each_concurrent(upgradable.len(), |item| async move {
-            let mut cmd = Command::new("cargo");
-            let cmd = cmd.args(&["install", "--force", &item.name]);
+    let cmd = cmd.args(&["install", "--force"]).args(upgradable);
 
-            cmd.stderr(std::process::Stdio::piped()).stdout(std::process::Stdio::piped());
+    let mut child = cmd.spawn().expect("`cargo install --force <pkgs>` failed to start");
 
-            // let output = cmd
-            //     .spawn()
-            //     .expect(format!("`cargo install --force {}` failed to start", item.name).as_str())
-            //     .await
-            //     .expect("something");
+    let status = child.wait().expect("failed to wait on child");
 
-            let mut child = cmd.spawn().expect("failed to spawn command");
-
-            let stdout = child
-                .stderr
-                .take()
-                .expect("child did not have a handle to stdout");
-
-            let mut reader = BufReader::new(stdout).lines();
-
-            tokio::spawn(async {
-                let _ = child.await.expect("child process encountered an error");
-            });
-
-            while let Some(line) = reader.next_line().await.unwrap() {
-                let stripped_line = line.trim();
-                if !stripped_line.is_empty() {
-                    // pb.set_message(stripped_line);
-                    println!("{}", stripped_line);
-                    // tx.send(stripped_line).unwrap();
-                }
-            }
-
-            // if !output.success() {
-            //     match output.code() {
-            //         Some(code) => println!("Exited with status code: {}", code),
-            //         None => println!("Process terminated by signal"),
-            //     }
-            // }
-        });
-
-    tasks.await;
-    // pb.finish_and_clear();
+    if !status.success() {
+        match status.code() {
+            Some(code) => println!("Exited with status code: {}", code),
+            None => println!("Process terminated by signal"),
+        }
+    }
 }
 
 pub(crate) async fn check_for_updates() -> CratesInfoContainer {
@@ -226,61 +190,4 @@ pub(crate) fn pretty_print_stats(container: CratesInfoContainer) {
     }
 
     print!("{}", table.render());
-}
-
-#[allow(dead_code)]
-pub async fn spin() {
-    use indicatif::{ProgressBar, ProgressStyle};
-    use tokio::io::{AsyncBufReadExt, BufReader};
-    use std::process::Stdio;
-
-    let container = check_for_updates().await;
-    let upgradable: Vec<&CrateInfo> = container
-        .crates
-        .iter()
-        .filter(|item| item.is_upgradable())
-        .collect();
-
-    let pb = ProgressBar::new_spinner();
-
-    pb.enable_steady_tick(200);
-
-    for item in upgradable {
-        let mut cmd = Command::new("cargo");
-        let cmd = cmd.args(&["install", "--force", item.name.as_str()]);
-
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template(
-                    ("{spinner:.bold}".to_owned() + " " + &item.name + ": " + "{wide_msg}").as_str()
-                ),
-        );
-
-        cmd.stderr(Stdio::piped());
-
-        let mut child = cmd.spawn().expect("failed to spawn command");
-
-        let stdout = child
-            .stderr
-            .take()
-            .expect("child did not have a handle to stdout");
-
-        let mut reader = BufReader::new(stdout).lines();
-
-        // Ensure the child process is spawned in the runtime so it can
-        // make progress on its own while we await for any output.
-        tokio::spawn(async {
-            let _ = child.await.expect("child process encountered an error");
-        });
-
-        while let Some(line) = reader.next_line().await.unwrap() {
-            let stripped_line = line.trim();
-            if !stripped_line.is_empty() {
-                pb.set_message(stripped_line);
-            }
-        }
-
-        pb.finish_and_clear();
-    }
-
 }

@@ -10,7 +10,7 @@ pub fn new() -> App<'static, 'static> {
                 .version(crate_version!())
                 .about(crate_description!())
                 .args(&[
-                    Arg::from_usage("-u --update 'Update any executables that has updates'"),
+                    Arg::from_usage("-u --update 'Update upgradable crates'"),
                     Arg::from_usage("-c --check 'Checks for available updates'"),
                 ]),
         )

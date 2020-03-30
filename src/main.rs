@@ -3,10 +3,6 @@ mod cli;
 
 #[tokio::main]
 async fn main() {
-    // if true {
-    //     return cargo::spin().await;
-    // }
-
     let app = cli::new().get_matches();
 
     let cmd = match app.subcommand {

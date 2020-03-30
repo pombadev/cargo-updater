@@ -4,12 +4,12 @@ use miniserde::{json, Deserialize, Serialize};
 use regex::Regex;
 use reqwest::{header::USER_AGENT, Client};
 use semver::Version;
+use std::process::Command;
 use term_table::{
     row::Row,
     table_cell::{Alignment, TableCell},
     Table, TableStyle,
 };
-use std::process::Command;
 
 #[derive(Debug)]
 pub(crate) struct CrateInfo {
@@ -101,7 +101,9 @@ pub(crate) async fn update_upgradable_crates() {
 
     let cmd = cmd.args(&["install", "--force"]).args(upgradable);
 
-    let mut child = cmd.spawn().expect("`cargo install --force <pkgs>` failed to start");
+    let mut child = cmd
+        .spawn()
+        .expect("`cargo install --force <pkgs>` failed to start");
 
     let status = child.wait().expect("failed to wait on child");
 

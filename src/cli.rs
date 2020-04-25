@@ -11,7 +11,7 @@ pub fn new() -> App<'static, 'static> {
                 .about(crate_description!())
                 .args(&[
                     Arg::from_usage("-u --update 'Update upgradable crates'"),
-                    Arg::from_usage("-l --list 'Checks for available updates'"),
+                    Arg::from_usage("-l --list 'List latest available version'"),
                 ]),
         )
 }

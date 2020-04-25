@@ -121,6 +121,10 @@ pub(crate) async fn update_upgradable_crates() {
         .map(|item| item.name.clone())
         .collect();
 
+    if crates.len() == 0 {
+        return println!("Nothing to update, run `cargo global --list` to view installed and latest version.")
+    }
+
     let mut jobs = vec![];
 
     for item in crates {

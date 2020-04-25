@@ -4,14 +4,14 @@ pub fn new() -> App<'static, 'static> {
     App::new(crate_name!())
         .bin_name("cargo")
         .version(crate_version!())
-        .setting(AppSettings::ColorAuto)
         .subcommand(
             SubCommand::with_name("global")
+                .setting(AppSettings::ColorAuto)
                 .version(crate_version!())
                 .about(crate_description!())
                 .args(&[
                     Arg::from_usage("-u --update 'Update upgradable crates'"),
-                    Arg::from_usage("-c --check 'Checks for available updates'"),
+                    Arg::from_usage("-l --list 'Checks for available updates'"),
                 ]),
         )
 }

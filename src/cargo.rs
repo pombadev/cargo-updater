@@ -4,7 +4,8 @@ use miniserde::{json, Deserialize, Serialize};
 use regex::Regex;
 use reqwest::{header::USER_AGENT, Client};
 use semver::Version;
-use std::process::Command;
+use std::{process::Command, thread};
+
 use term_table::{
     row::Row,
     table_cell::{Alignment, TableCell},
@@ -20,9 +21,21 @@ pub(crate) struct CrateInfo {
 
 impl CrateInfo {
     pub(crate) fn is_upgradable(&self) -> bool {
-        let max = Version::parse(self.max_version.as_str()).expect("Unable to parse max version.");
-        let curr = Version::parse(self.current_version.as_str())
-            .expect("Unable to parse current version.");
+        let max = match Version::parse(self.max_version.as_str()) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("{}", e.to_string());
+                std::process::exit(1);
+            }
+        };
+
+        let curr = match Version::parse(self.current_version.as_str()) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("{}", e.to_string());
+                std::process::exit(1);
+            }
+        };
 
         curr < max
     }
@@ -87,46 +100,56 @@ impl CratesInfoContainer {
     }
 }
 
-pub(crate) async fn update_upgradable_crates() {
-    let container = check_for_updates().await;
+#[derive(Serialize, Deserialize, Debug)]
+struct MaxVersion {
+    max_version: String,
+}
 
-    let upgradable: Vec<&str> = container
+#[derive(Serialize, Deserialize, Debug)]
+pub struct InfoJson {
+    #[serde(rename = "crate")]
+    crate_name: MaxVersion,
+}
+
+pub(crate) async fn update_upgradable_crates() {
+    let container = get_upgradable_crates().await;
+
+    let crates: Vec<String> = container
         .crates
         .iter()
         .filter(|item| item.is_upgradable())
-        .map(|item| item.name.as_str())
+        .map(|item| item.name.clone())
         .collect();
 
-    let mut cmd = Command::new("cargo");
+    let mut jobs = vec![];
 
-    let cmd = cmd.args(&["install", "--force"]).args(upgradable);
+    for item in crates {
+        jobs.push(thread::spawn(move || {
+            let mut cmd = Command::new("cargo");
 
-    let mut child = cmd
-        .spawn()
-        .expect("`cargo install --force <pkgs>` failed to start");
+            let cmd = cmd.args(&["install", "--force"]).arg(&item);
 
-    let status = child.wait().expect("failed to wait on child");
+            let mut child = cmd
+                .spawn()
+                .expect(format!("`cargo install --force {}` failed to start", &item).as_str());
 
-    if !status.success() {
-        match status.code() {
-            Some(code) => println!("Exited with status code: {}", code),
-            None => println!("Process terminated by signal"),
-        }
+            let status = child.wait().expect("failed to wait on child");
+
+            if !status.success() {
+                match status.code() {
+                    Some(code) => println!("Exited with status code: {}", code),
+                    None => println!("Process terminated by signal"),
+                }
+            }
+        }));
+    }
+
+    for job in jobs {
+        let _ = job.join();
     }
 }
 
-pub(crate) async fn check_for_updates() -> CratesInfoContainer {
-    #[derive(Serialize, Deserialize, Debug)]
-    struct MaxVersion {
-        max_version: String,
-    }
-
-    #[derive(Serialize, Deserialize, Debug)]
-    pub struct InfoJson {
-        #[serde(rename = "crate")]
-        crate_name: MaxVersion,
-    }
-
+pub(crate) async fn get_upgradable_crates() -> CratesInfoContainer {
     let mut container = CratesInfoContainer::new();
 
     let limit = container.crates.len();

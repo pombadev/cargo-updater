@@ -7,18 +7,19 @@ async fn main() {
 
     let cmd = match app.subcommand {
         None => {
-            eprintln!("Unexpected error occurred in subcommand.");
+            let _ = cli::new().print_long_help();
             std::process::exit(1);
         }
         Some(sub_cmd) => sub_cmd.matches,
     };
 
-    if cmd.is_present("check") {
-        let container = cargo::check_for_updates().await;
-        return cargo::pretty_print_stats(container);
+    // if we have more that two flags, we need to change this
+    if cmd.is_present("list") || !cmd.is_present("list") && !cmd.is_present("update") {
+        let container = cargo::get_upgradable_crates().await;
+        cargo::pretty_print_stats(container);
     }
 
-    if (!cmd.is_present("check") && !cmd.is_present("update")) || cmd.is_present("update") {
-        return cargo::update_upgradable_crates().await;
+    if cmd.is_present("update") {
+        cargo::update_upgradable_crates().await
     }
 }

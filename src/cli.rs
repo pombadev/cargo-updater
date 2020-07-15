@@ -5,7 +5,7 @@ pub fn new() -> App<'static, 'static> {
         .bin_name("cargo")
         .version(crate_version!())
         .subcommand(
-            SubCommand::with_name("global")
+            SubCommand::with_name("updater")
                 .setting(AppSettings::ColorAuto)
                 .version(crate_version!())
                 .about(crate_description!())

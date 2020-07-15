@@ -1,4 +1,4 @@
-# Cargo global
+# Cargo updater
 
 > A npm inspired cargo subcommand for checking and updating executables installed.
 
@@ -8,8 +8,12 @@
 
 ### Installation
 
-Currently this is available only through `git`, will publish to `crates.io` once i settle with a name.
-
+```shell script
+cargo install cargo-updater
 ```
-cargo install --git https://github.com/pjmp/cargo-global.git
+
+### Usage
+
+```shell script
+cargo updater
 ```

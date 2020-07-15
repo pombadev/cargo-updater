@@ -4,7 +4,7 @@ use miniserde::{json, Deserialize, Serialize};
 use regex::Regex;
 use reqwest::{header::USER_AGENT, Client};
 use semver::Version;
-use std::{process::Command, thread};
+use std::process::Command;
 
 use term_table::{
     row::Row,
@@ -47,7 +47,7 @@ pub(crate) struct CratesInfoContainer {
 }
 
 impl CratesInfoContainer {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn maybe_new() -> Self {
         Self::parse_from_stdio().expect("Unable to parse installed version from stdio.")
     }
 
@@ -122,39 +122,31 @@ pub(crate) async fn update_upgradable_crates() {
         .collect();
 
     if crates.len() == 0 {
-        return println!("Nothing to update, run `cargo global --list` to view installed and latest version.")
+        return println!(
+            "Nothing to update, run `cargo updater --list` to view installed version and latest version."
+        );
     }
 
-    let mut jobs = vec![];
+    let mut cmd = Command::new("cargo");
 
-    for item in crates {
-        jobs.push(thread::spawn(move || {
-            let mut cmd = Command::new("cargo");
+    let cmd = cmd.args(&["install", "--force"]).args(&crates);
 
-            let cmd = cmd.args(&["install", "--force"]).arg(&item);
+    let mut child = cmd
+        .spawn()
+        .expect(format!("`cargo install --force {:?}` failed to start", &crates).as_str());
 
-            let mut child = cmd
-                .spawn()
-                .expect(format!("`cargo install --force {}` failed to start", &item).as_str());
+    let status = child.wait().expect("failed to wait process status.");
 
-            let status = child.wait().expect("failed to wait on child");
-
-            if !status.success() {
-                match status.code() {
-                    Some(code) => println!("Exited with status code: {}", code),
-                    None => println!("Process terminated by signal"),
-                }
-            }
-        }));
-    }
-
-    for job in jobs {
-        let _ = job.join();
+    if !status.success() {
+        match status.code() {
+            Some(code) => println!("Exited with status code: {}", code),
+            None => eprintln!("Unknown error"),
+        }
     }
 }
 
 pub(crate) async fn get_upgradable_crates() -> CratesInfoContainer {
-    let mut container = CratesInfoContainer::new();
+    let mut container = CratesInfoContainer::maybe_new();
 
     let limit = container.crates.len();
 

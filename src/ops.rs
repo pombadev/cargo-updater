@@ -1,7 +1,7 @@
+use anyhow::{Context, Result};
 use colored::Colorize;
 use futures::{stream, StreamExt};
 use miniserde::{json, Deserialize, Serialize};
-use regex::Regex;
 use reqwest::{header::USER_AGENT, Client};
 use semver::Version;
 use std::process::Command;
@@ -15,13 +15,13 @@ use term_table::{
 #[derive(Debug)]
 pub(crate) struct CrateInfo {
     pub(crate) name: String,
-    pub(crate) current_version: String,
-    pub(crate) max_version: String,
+    pub(crate) current: String,
+    pub(crate) online: String,
 }
 
 impl CrateInfo {
     pub(crate) fn is_upgradable(&self) -> bool {
-        let max = match Version::parse(self.max_version.as_str()) {
+        let max = match Version::parse(self.online.as_str()) {
             Ok(v) => v,
             Err(e) => {
                 eprintln!("{}", e.to_string());
@@ -29,7 +29,7 @@ impl CrateInfo {
             }
         };
 
-        let curr = match Version::parse(self.current_version.as_str()) {
+        let curr = match Version::parse(self.current.as_str()) {
             Ok(v) => v,
             Err(e) => {
                 eprintln!("{}", e.to_string());
@@ -47,56 +47,37 @@ pub(crate) struct CratesInfoContainer {
 }
 
 impl CratesInfoContainer {
-    pub(crate) fn maybe_new() -> Self {
-        Self::parse_from_stdio().expect("Unable to parse installed version from stdio.")
+    pub(crate) fn new() -> Result<Self> {
+        Self::parse().context("Unable to parse installed version from stdio.")
     }
 
-    pub(crate) fn parse_from_stdio() -> Result<CratesInfoContainer, Box<dyn std::error::Error>> {
-        // spits output to stdio that looks like this:
-        // cargo v0.38.0:
-        //     cargo
-        let output = std::process::Command::new("cargo")
+    pub(crate) fn parse() -> Result<CratesInfoContainer> {
+        let output = Command::new("cargo")
             .args(&["install", "--list"])
             .output()?;
 
-        // matches pattern: some-crate v0.0.1: from the output.
-        let re = Regex::new(r"\S+.\sv\d+.*:")?;
-        // matches pattern: `some-crate ` from the output.
-        let name_re = Regex::new(r"\S+.\s")?;
-        // matches pattern: `v0.0.1` from the output.
-        let version_re = Regex::new(r"v\d.+\d")?;
-        // matches any pattern that starts with: `v`
-        // we could use `.starts_with` but we need this to strip `v` later.
-        #[allow(clippy::trivial_regex)]
-        let v_prefix = Regex::new(r"^v")?;
-
-        let crates_name_info = re
-            .captures_iter(String::from_utf8(output.stdout)?.as_str())
-            .map(|item| {
-                // extract first line only as it's the only thing we are interested in.
-                let line = item[0].to_string();
-
-                let name_capture = name_re
-                    .captures(line.as_str())
-                    .expect("Unable to capture regex by name.");
-                let name = name_capture[0].trim().to_string();
-
-                let version_capture = version_re
-                    .captures(line.as_str())
-                    .expect("Unable to capture regex by version.");
-                let version = v_prefix.replace(&version_capture[0], "").trim().to_string();
+        let crates = std::str::from_utf8(&output.stdout[..])?
+            .lines()
+            .filter(|line| {
+                // https://github.com/rust-lang/cargo/blob/f84f3f8c630c75a1ec01b818ff469d3496228c6b/src/cargo/ops/cargo_install.rs#L687
+                !line.starts_with("    ")
+            })
+            .map(|line| {
+                // https://github.com/rust-lang/cargo/blob/f84f3f8c630c75a1ec01b818ff469d3496228c6b/src/cargo/ops/cargo_install.rs#L689
+                let m = line.trim_end_matches(|c| c == ':');
+                let mut m = m.split(" v");
+                let name = m.next().unwrap_or("");
+                let version = m.next().unwrap_or("");
 
                 CrateInfo {
-                    name,
-                    current_version: version,
-                    max_version: "".to_string(),
+                    name: name.into(),
+                    current: version.into(),
+                    online: String::new(),
                 }
             })
             .collect::<Vec<CrateInfo>>();
 
-        Ok(CratesInfoContainer {
-            crates: crates_name_info,
-        })
+        Ok(CratesInfoContainer { crates })
     }
 }
 
@@ -111,8 +92,8 @@ pub struct InfoJson {
     crate_name: MaxVersion,
 }
 
-pub(crate) async fn update_upgradable_crates() {
-    let container = get_upgradable_crates().await;
+pub(crate) async fn update_upgradable_crates() -> Result<()> {
+    let container = get_upgradable_crates().await?;
 
     let crates: Vec<String> = container
         .crates
@@ -122,9 +103,11 @@ pub(crate) async fn update_upgradable_crates() {
         .collect();
 
     if crates.len() == 0 {
-        return println!(
-            "Nothing to update, run `cargo updater --list` to view installed version and latest version."
+        println!(
+            "Nothing to update, run `cargo updater --list` to view installed version and available version."
         );
+
+        return Ok(());
     }
 
     let mut cmd = Command::new("cargo");
@@ -141,12 +124,14 @@ pub(crate) async fn update_upgradable_crates() {
         match status.code() {
             Some(code) => println!("Exited with status code: {}", code),
             None => eprintln!("Unknown error"),
-        }
+        };
     }
+
+    Ok(())
 }
 
-pub(crate) async fn get_upgradable_crates() -> CratesInfoContainer {
-    let mut container = CratesInfoContainer::maybe_new();
+pub(crate) async fn get_upgradable_crates() -> Result<CratesInfoContainer> {
+    let mut container = CratesInfoContainer::new()?;
 
     let limit = container.crates.len();
 
@@ -169,12 +154,12 @@ pub(crate) async fn get_upgradable_crates() -> CratesInfoContainer {
             let response: InfoJson =
                 json::from_str(response.as_str()).expect("Unable to parse response to json.");
 
-            item.max_version = response.crate_name.max_version;
+            item.online = response.crate_name.max_version;
         });
 
     tasks.await;
 
-    container
+    Ok(container)
 }
 
 pub(crate) fn pretty_print_stats(container: CratesInfoContainer) {
@@ -194,18 +179,15 @@ pub(crate) fn pretty_print_stats(container: CratesInfoContainer) {
         let (name, max) = if item.is_upgradable() {
             (
                 item.name.as_str().bright_yellow(),
-                item.max_version.as_str().bright_yellow(),
+                item.online.as_str().bright_yellow(),
             )
         } else {
-            (
-                item.name.as_str().green(),
-                item.max_version.as_str().green(),
-            )
+            (item.name.as_str().green(), item.online.as_str().green())
         };
 
         table.add_row(Row::new(vec![
             TableCell::new_with_alignment(name, 1, Alignment::Left),
-            TableCell::new_with_alignment(item.current_version.as_str(), 1, Alignment::Center),
+            TableCell::new_with_alignment(item.current.as_str(), 1, Alignment::Center),
             TableCell::new_with_alignment(max, 1, Alignment::Center),
         ]))
     }

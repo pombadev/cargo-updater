@@ -1,8 +1,10 @@
-mod cargo;
+use anyhow::Result;
+
 mod cli;
+mod ops;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     let app = cli::new().get_matches();
 
     let cmd = match app.subcommand {
@@ -15,11 +17,13 @@ async fn main() {
 
     // if we have more that two flags, we need to change this
     if cmd.is_present("list") || !cmd.is_present("list") && !cmd.is_present("update") {
-        let container = cargo::get_upgradable_crates().await;
-        cargo::pretty_print_stats(container);
+        let container = ops::get_upgradable_crates().await?;
+        ops::pretty_print_stats(container);
     }
 
     if cmd.is_present("update") {
-        cargo::update_upgradable_crates().await
+        ops::update_upgradable_crates().await?;
     }
+
+    Ok(())
 }

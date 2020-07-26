@@ -83,7 +83,7 @@ impl CratesInfoContainer {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct MaxVersion {
-    max_version: String,
+    newest_version: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -102,7 +102,7 @@ pub(crate) async fn update_upgradable_crates() -> Result<()> {
         .map(|item| item.name.clone())
         .collect();
 
-    if crates.len() == 0 {
+    if crates.is_empty() {
         println!(
             "Nothing to update, run `cargo updater --list` to view installed version and available version."
         );
@@ -154,7 +154,7 @@ pub(crate) async fn get_upgradable_crates() -> Result<CratesInfoContainer> {
             let response: InfoJson =
                 json::from_str(response.as_str()).expect("Unable to parse response to json.");
 
-            item.online = response.crate_name.max_version;
+            item.online = response.crate_name.newest_version;
         });
 
     tasks.await;

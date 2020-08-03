@@ -1,10 +1,9 @@
-use anyhow::Result;
+use anyhow::{Result, Context};
 
 mod cli;
 mod ops;
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let app = cli::new().get_matches();
 
     let cmd = match app.subcommand {
@@ -15,14 +14,15 @@ async fn main() -> Result<()> {
         Some(sub_cmd) => sub_cmd.matches,
     };
 
+    let container = ops::CratesInfoContainer::new()?;
+
     // if we have more that two flags, we need to change this
     if cmd.is_present("list") || !cmd.is_present("list") && !cmd.is_present("update") {
-        let container = ops::get_upgradable_crates().await?;
-        ops::pretty_print_stats(container);
+        let _ = container.pretty_print_stats().context("Unable to list installed binaries.");
     }
 
     if cmd.is_present("update") {
-        ops::update_upgradable_crates().await?;
+        let _ = container.update_upgradable().context("Unable to run updater.");
     }
 
     Ok(())

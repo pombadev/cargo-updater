@@ -1,11 +1,10 @@
+use std::process::Command;
+use std::{sync::mpsc::channel, thread};
+
 use anyhow::{Context, Result};
 use colored::Colorize;
-use futures::{stream, StreamExt};
-use miniserde::{json, Deserialize, Serialize};
-use reqwest::{header::USER_AGENT, Client};
 use semver::Version;
-use std::process::Command;
-
+use serde::{Deserialize, Serialize};
 use term_table::{
     row::Row,
     table_cell::{Alignment, TableCell},
@@ -43,7 +42,7 @@ impl CrateInfo {
 
 #[derive(Debug)]
 pub(crate) struct CratesInfoContainer {
-    crates: Vec<CrateInfo>,
+    pub(crate) crates: Vec<CrateInfo>,
 }
 
 impl CratesInfoContainer {
@@ -79,118 +78,119 @@ impl CratesInfoContainer {
 
         Ok(CratesInfoContainer { crates })
     }
-}
 
-#[derive(Serialize, Deserialize, Debug)]
-struct MaxVersion {
-    newest_version: String,
-}
+    pub(crate) fn get_upgradable(&self) -> Result<Self> {
+        #[derive(Serialize, Deserialize, Debug)]
+        struct MaxVersion {
+            newest_version: String,
+        }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct InfoJson {
-    #[serde(rename = "crate")]
-    crate_name: MaxVersion,
-}
+        #[derive(Serialize, Deserialize, Debug)]
+        pub struct InfoJson {
+            #[serde(rename = "crate")]
+            crate_name: MaxVersion,
+        }
+        let (tx, rx) = channel();
 
-pub(crate) async fn update_upgradable_crates() -> Result<()> {
-    let container = get_upgradable_crates().await?;
+        for item in Self::new()?.crates {
+            let tx = tx.clone();
 
-    let crates: Vec<String> = container
-        .crates
-        .iter()
-        .filter(|item| item.is_upgradable())
-        .map(|item| item.name.clone())
-        .collect();
+            thread::spawn(move || -> Result<()> {
+                let response =
+                    attohttpc::get(format!("https://crates.io/api/v1/crates/{}", item.name))
+                        .send()?;
 
-    if crates.is_empty() {
-        println!(
-            "Nothing to update, run `cargo updater --list` to view installed version and available version."
-        );
+                let response = response.json::<InfoJson>()?;
 
-        return Ok(());
+                tx.send(CrateInfo {
+                    name: item.name,
+                    current: item.current,
+                    online: response.crate_name.newest_version,
+                })?;
+
+                Ok(())
+            });
+        }
+
+        drop(tx); // let know that loop is done.
+
+        let response = rx.iter().map(|item| item).collect::<Vec<CrateInfo>>();
+
+        Ok(Self { crates: response })
     }
 
-    let mut cmd = Command::new("cargo");
+    pub(crate) fn update_upgradable(&self) -> Result<()> {
+        let container = self.get_upgradable()?;
 
-    let cmd = cmd.args(&["install", "--force"]).args(&crates);
+        let crates: Vec<String> = container
+            .crates
+            .iter()
+            .filter(|item| item.is_upgradable())
+            .map(|item| item.name.clone())
+            .collect();
 
-    let mut child = cmd
-        .spawn()
-        .expect(format!("`cargo install --force {:?}` failed to start", &crates).as_str());
+        if crates.is_empty() {
+            println!(
+                "Nothing to update, run `cargo updater --list` to view installed version and available version."
+            );
 
-    let status = child.wait().expect("failed to wait process status.");
+            return Ok(());
+        }
 
-    if !status.success() {
-        match status.code() {
-            Some(code) => println!("Exited with status code: {}", code),
-            None => eprintln!("Unknown error"),
-        };
+        let mut cmd = Command::new("cargo");
+
+        let cmd = cmd.args(&["install", "--force"]).args(&crates);
+
+        let mut child = cmd
+            .spawn()
+            .expect(format!("`cargo install --force {:?}` failed to start", &crates).as_str());
+
+        let status = child.wait().expect("failed to wait process status.");
+
+        if !status.success() {
+            match status.code() {
+                Some(code) => println!("Exited with status code: {}", code),
+                None => eprintln!("Unknown error"),
+            };
+        }
+
+        Ok(())
     }
 
-    Ok(())
-}
+    pub(crate) fn pretty_print_stats(&self) -> Result<()> {
+        let mut table = Table::new();
 
-pub(crate) async fn get_upgradable_crates() -> Result<CratesInfoContainer> {
-    let mut container = CratesInfoContainer::new()?;
+        table.style = TableStyle::blank();
 
-    let limit = container.crates.len();
-
-    let tasks =
-        stream::iter(container.crates.iter_mut()).for_each_concurrent(limit, |item| async move {
-            let client = Client::builder()
-                .user_agent(USER_AGENT)
-                .build()
-                .expect("Unable to build `reqwest` client.");
-
-            let response = client
-                .get(format!("https://crates.io/api/v1/crates/{}", item.name).as_str())
-                .send()
-                .await
-                .expect("Unable to `send` request.")
-                .text()
-                .await
-                .expect("Unable to parse response to text.");
-
-            let response: InfoJson =
-                json::from_str(response.as_str()).expect("Unable to parse response to json.");
-
-            item.online = response.crate_name.newest_version;
-        });
-
-    tasks.await;
-
-    Ok(container)
-}
-
-pub(crate) fn pretty_print_stats(container: CratesInfoContainer) {
-    let mut table = Table::new();
-
-    table.style = TableStyle::blank();
-
-    table.separate_rows = false;
-
-    table.add_row(Row::new(vec![
-        TableCell::new_with_alignment("Crate".bold().underline(), 1, Alignment::Left),
-        TableCell::new_with_alignment("Current".bold().underline(), 1, Alignment::Center),
-        TableCell::new_with_alignment("Latest".bold().underline(), 1, Alignment::Center),
-    ]));
-
-    for item in container.crates {
-        let (name, max) = if item.is_upgradable() {
-            (
-                item.name.as_str().bright_yellow(),
-                item.online.as_str().bright_yellow(),
-            )
-        } else {
-            (item.name.as_str().green(), item.online.as_str().green())
-        };
+        table.separate_rows = false;
 
         table.add_row(Row::new(vec![
-            TableCell::new_with_alignment(name, 1, Alignment::Left),
-            TableCell::new_with_alignment(item.current.as_str(), 1, Alignment::Center),
-            TableCell::new_with_alignment(max, 1, Alignment::Center),
-        ]))
-    }
+            TableCell::new_with_alignment("Crate".bold().underline(), 1, Alignment::Left),
+            TableCell::new_with_alignment("Current".bold().underline(), 1, Alignment::Center),
+            TableCell::new_with_alignment("Latest".bold().underline(), 1, Alignment::Center),
+        ]));
 
-    print!("{}", table.render());
+        let container = self.get_upgradable()?;
+
+        for item in container.crates {
+            let (name, max) = if item.is_upgradable() {
+                (
+                    item.name.as_str().bright_yellow(),
+                    item.online.as_str().bright_yellow(),
+                )
+            } else {
+                (item.name.as_str().green(), item.online.as_str().green())
+            };
+
+            table.add_row(Row::new(vec![
+                TableCell::new_with_alignment(name, 1, Alignment::Left),
+                TableCell::new_with_alignment(item.current.as_str(), 1, Alignment::Center),
+                TableCell::new_with_alignment(max, 1, Alignment::Center),
+            ]))
+        }
+
+        print!("{}", table.render());
+
+        Ok(())
+    }
 }

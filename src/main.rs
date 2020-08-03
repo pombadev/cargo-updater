@@ -1,4 +1,4 @@
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 
 mod cli;
 mod ops;
@@ -18,11 +18,15 @@ fn main() -> Result<()> {
 
     // if we have more that two flags, we need to change this
     if cmd.is_present("list") || !cmd.is_present("list") && !cmd.is_present("update") {
-        let _ = container.pretty_print_stats().context("Unable to list installed binaries.");
+        let _ = container
+            .pretty_print_stats()
+            .context("Unable to list installed binaries.");
     }
 
     if cmd.is_present("update") {
-        let _ = container.update_upgradable().context("Unable to run updater.");
+        let _ = container
+            .update_upgradable()
+            .context("Unable to run updater.");
     }
 
     Ok(())

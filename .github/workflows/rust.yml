@@ -19,4 +19,4 @@ jobs:
     - name: Build
       run: cargo build --verbose
     - name: Lint
-      run: cargo clippy --verbose
+      run: cargo clippy --verbose -- -D warnings

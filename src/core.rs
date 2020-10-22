@@ -114,7 +114,7 @@ impl CratesInfoContainer {
 
         drop(tx); // let know that loop is done.
 
-        let response = rx.iter().map(|item| item).collect::<Vec<CrateInfo>>();
+        let response = rx.iter().collect::<Vec<CrateInfo>>();
 
         Ok(Self { crates: response })
     }
@@ -143,7 +143,7 @@ impl CratesInfoContainer {
 
         let mut child = cmd
             .spawn()
-            .expect(format!("`cargo install --force {:?}` failed to start", &crates).as_str());
+            .unwrap_or_else(|_| panic!("`cargo install --force {:?}` failed to start", &crates));
 
         let status = child.wait().expect("failed to wait process status.");
 

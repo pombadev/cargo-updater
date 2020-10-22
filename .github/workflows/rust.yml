@@ -19,7 +19,7 @@ jobs:
     - name: Format
       run: |
           cargo fmt
-          git diff --quiet || echo 'Unformatted, run `cargo fmt` before pushing.' && exit 1
+          git diff --quiet || (echo 'Unformatted, run `cargo fmt` before pushing.' && exit 1)
     - name: Lint
       run: cargo clippy --verbose -- -D warnings
     - name: Build

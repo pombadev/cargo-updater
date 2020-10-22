@@ -16,7 +16,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --verbose
+    - name: Format
+      run: |
+          cargo fmt
+          git diff --quiet || echo 'Unformatted, run `cargo fmt` before pushing.' && exit 1
     - name: Lint
       run: cargo clippy --verbose -- -D warnings
+    - name: Build
+      run: cargo build --verbose

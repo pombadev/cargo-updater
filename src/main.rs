@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 
 mod cli;
-mod ops;
+mod core;
 
 fn main() -> Result<()> {
     let app = cli::new().get_matches();
@@ -14,12 +14,11 @@ fn main() -> Result<()> {
         Some(sub_cmd) => sub_cmd.matches,
     };
 
-    let container = ops::CratesInfoContainer::new()?;
+    let container = core::CratesInfoContainer::new()?;
 
-    // if we have more that two flags, we need to change this
-    if cmd.is_present("list") || !cmd.is_present("list") && !cmd.is_present("update") {
+    if cmd.is_present("list") || cmd.args.is_empty() {
         let _ = container
-            .pretty_print_stats()
+            .pretty_print()
             .context("Unable to list installed binaries.");
     }
 

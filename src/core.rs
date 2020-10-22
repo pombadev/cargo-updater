@@ -157,7 +157,7 @@ impl CratesInfoContainer {
         Ok(())
     }
 
-    pub(crate) fn pretty_print_stats(&self) -> Result<()> {
+    pub(crate) fn pretty_print(&self) -> Result<()> {
         let mut table = Table::new();
 
         table.style = TableStyle::blank();
@@ -170,7 +170,10 @@ impl CratesInfoContainer {
             TableCell::new_with_alignment("Latest".bold().underline(), 1, Alignment::Center),
         ]));
 
-        let container = self.get_upgradable()?;
+        let mut container = self.get_upgradable()?;
+
+        // sort by name
+        container.crates.sort_by(|a, b| a.name.cmp(&b.name));
 
         for item in container.crates {
             let (name, max) = if item.is_upgradable() {

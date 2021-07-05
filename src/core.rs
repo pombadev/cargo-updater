@@ -1,5 +1,8 @@
-use std::process::Command;
-use std::{sync::mpsc::channel, thread};
+use std::{
+    process::{self, Command},
+    sync::mpsc::channel,
+    thread,
+};
 
 use anyhow::{Context, Result};
 use colored::Colorize;
@@ -19,24 +22,12 @@ pub(crate) struct CrateInfo {
 }
 
 impl CrateInfo {
-    pub(crate) fn is_upgradable(&self) -> bool {
-        let max = match Version::parse(self.online.as_str()) {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("{}", e.to_string());
-                std::process::exit(1);
-            }
-        };
+    pub(crate) fn is_upgradable(&self) -> Result<bool> {
+        let max = Version::parse(self.online.as_str())?;
 
-        let curr = match Version::parse(self.current.as_str()) {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("{}", e.to_string());
-                std::process::exit(1);
-            }
-        };
+        let curr = Version::parse(self.current.as_str())?;
 
-        curr < max
+        Ok(curr < max)
     }
 }
 
@@ -63,10 +54,16 @@ impl CratesInfoContainer {
             })
             .map(|line| {
                 // https://github.com/rust-lang/cargo/blob/f84f3f8c630c75a1ec01b818ff469d3496228c6b/src/cargo/ops/cargo_install.rs#L689
-                let m = line.trim_end_matches(|c| c == ':');
-                let mut m = m.split(" v");
-                let name = m.next().unwrap_or("");
-                let version = m.next().unwrap_or("");
+                let line = line.trim_end_matches(|c| c == ':');
+                let mut name_version = line.split(" ");
+                let name = name_version.next().unwrap_or("");
+                let version = name_version.next().unwrap_or("");
+
+                let version = if version.starts_with('v') {
+                    version.strip_prefix('v').unwrap_or("")
+                } else {
+                    version
+                };
 
                 CrateInfo {
                     name: name.into(),
@@ -125,13 +122,16 @@ impl CratesInfoContainer {
         let crates: Vec<String> = container
             .crates
             .iter()
-            .filter(|item| item.is_upgradable())
+            .filter(|item| match item.is_upgradable() {
+                Ok(res) => res,
+                Err(_) => false,
+            })
             .map(|item| item.name.clone())
             .collect();
 
         if crates.is_empty() {
             println!(
-                "Nothing to update, run `cargo updater --list` to view installed version and available version."
+                "Nothing to update, run `cargo updater --list` to view installed and available version."
             );
 
             return Ok(());
@@ -141,16 +141,26 @@ impl CratesInfoContainer {
 
         let cmd = cmd.args(&["install", "--force"]).args(&crates);
 
-        let mut child = cmd
-            .spawn()
-            .unwrap_or_else(|_| panic!("`cargo install --force {:?}` failed to start", &crates));
+        let mut child = cmd.spawn().unwrap_or_else(|_| {
+            eprintln!("`cargo install --force {:?}` failed to start", &crates);
+            process::exit(1);
+        });
 
-        let status = child.wait().expect("failed to wait process status.");
+        let status = child.wait().unwrap_or_else(|_| {
+            eprintln!("failed to wait process status.");
+            process::exit(1);
+        });
 
         if !status.success() {
             match status.code() {
-                Some(code) => println!("Exited with status code: {}", code),
-                None => eprintln!("Unknown error"),
+                Some(code) => {
+                    eprintln!("Exited with status code: {}", code);
+                    process::exit(code);
+                }
+                None => {
+                    eprintln!("Running `cargo install` was not successful.");
+                    process::exit(1);
+                }
             };
         }
 
@@ -176,7 +186,7 @@ impl CratesInfoContainer {
         container.crates.sort_by(|a, b| a.name.cmp(&b.name));
 
         for item in container.crates {
-            let (name, max) = if item.is_upgradable() {
+            let (name, max) = if item.is_upgradable().unwrap_or(false) {
                 (
                     item.name.as_str().bright_yellow(),
                     item.online.as_str().bright_yellow(),

@@ -55,7 +55,7 @@ impl CratesInfoContainer {
             .map(|line| {
                 // https://github.com/rust-lang/cargo/blob/f84f3f8c630c75a1ec01b818ff469d3496228c6b/src/cargo/ops/cargo_install.rs#L689
                 let line = line.trim_end_matches(|c| c == ':');
-                let mut name_version = line.split(" ");
+                let mut name_version = line.split(' ');
                 let name = name_version.next().unwrap_or("");
                 let version = name_version.next().unwrap_or("");
 
@@ -122,10 +122,7 @@ impl CratesInfoContainer {
         let crates: Vec<String> = container
             .crates
             .iter()
-            .filter(|item| match item.is_upgradable() {
-                Ok(res) => res,
-                Err(_) => false,
-            })
+            .filter(|item| item.is_upgradable().unwrap_or(false))
             .map(|item| item.name.clone())
             .collect();
 

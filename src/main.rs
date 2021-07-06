@@ -17,15 +17,13 @@ fn main() -> Result<()> {
     let container = core::CratesInfoContainer::new()?;
 
     if cmd.is_present("list") || cmd.args.is_empty() {
-        let _ = container
-            .pretty_print()
-            .context("Unable to list installed binaries.");
+        container
+            .list()
+            .context("Unable to list installed binaries.")?;
     }
 
     if cmd.is_present("update") {
-        let _ = container
-            .update_upgradable()
-            .context("Unable to run updater.");
+        container.update().context("Unable to run updater.")?;
     }
 
     Ok(())

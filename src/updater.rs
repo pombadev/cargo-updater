@@ -16,16 +16,16 @@ use term_table::{
 
 #[derive(Debug, PartialEq)]
 pub enum CrateKind {
-    Cratesio,
-    Git,
+    Cratesio(String),
+    Git(String),
     Local,
 }
 
 impl fmt::Display for CrateKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CrateKind::Cratesio => write!(f, "crates.io"),
-            CrateKind::Git => write!(f, "git"),
+            CrateKind::Cratesio(_) => write!(f, "crates.io"),
+            CrateKind::Git(_) => write!(f, "git"),
             CrateKind::Local => write!(f, "local"),
         }
     }
@@ -53,7 +53,7 @@ impl CrateInfo {
     }
 
     pub(crate) fn is_standard(&self) -> bool {
-        self.kind == CrateKind::Cratesio
+        self.kind.to_string() == "crates.io"
     }
 }
 
@@ -77,7 +77,7 @@ impl CratesInfoContainer {
             .filter(|line| !line.starts_with(char::is_whitespace))
             .map(|line| {
                 let krate = line.split(' ').enumerate().fold(
-                    ("", "", CrateKind::Cratesio),
+                    ("", "", CrateKind::Cratesio("".into())),
                     |mut total, (index, item)| {
                         match index {
                             // crate's name
@@ -96,7 +96,7 @@ impl CratesInfoContainer {
                                 let path = item.trim_matches(|c| c == '(' || c == ')' || c == ':');
 
                                 let kind = if path.starts_with("http") {
-                                    CrateKind::Git
+                                    CrateKind::Git(path.to_string())
                                 } else {
                                     CrateKind::Local
                                 };
@@ -116,7 +116,7 @@ impl CratesInfoContainer {
                     kind,
                     name: name.into(),
                     current: current.into(),
-                    online: String::new(),
+                    online: String::with_capacity(0),
                 }
             })
             .collect::<Vec<CrateInfo>>();
@@ -141,10 +141,15 @@ impl CratesInfoContainer {
 
                     let online = res["crate"]["newest_version"]
                         .as_str()
-                        .expect("field crate.newest_version not found");
+                        .expect("field `crate.newest_version` not found");
+
+                    let repository = res["crate"]["repository"]
+                        .as_str()
+                        .expect("field `crate.repository` not found");
 
                     krate = CrateInfo {
                         online: online.into(),
+                        kind: CrateKind::Cratesio(repository.into()),
                         ..item
                     };
                 } else {
@@ -253,6 +258,7 @@ impl CratesInfoContainer {
             TableCell::new_with_alignment("Current".bold().underline(), 1, Alignment::Center),
             TableCell::new_with_alignment("Latest".bold().underline(), 1, Alignment::Center),
             TableCell::new_with_alignment("Source".bold().underline(), 1, Alignment::Center),
+            TableCell::new_with_alignment("Repository".bold().underline(), 1, Alignment::Center),
         ]));
 
         // empty row
@@ -278,6 +284,12 @@ impl CratesInfoContainer {
                 krate.kind.to_string().bright_yellow()
             };
 
+            let (repo, repo_alignment) = match krate.kind {
+                CrateKind::Cratesio(repo) => (repo.bright_purple(), Alignment::Center),
+                CrateKind::Git(url) => (url.bright_purple(), Alignment::Center),
+                CrateKind::Local => ("-".bright_white(), Alignment::Center),
+            };
+
             table.add_row(Row::new(vec![
                 TableCell::new_with_alignment(&krate.name.bright_blue(), 1, Alignment::Left),
                 TableCell::new_with_alignment(
@@ -287,6 +299,7 @@ impl CratesInfoContainer {
                 ),
                 TableCell::new_with_alignment(online, 1, Alignment::Center),
                 TableCell::new_with_alignment(kind, 1, Alignment::Center),
+                TableCell::new_with_alignment(repo, 1, repo_alignment),
             ]))
         }
 

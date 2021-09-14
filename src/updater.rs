@@ -18,7 +18,17 @@ use term_table::{
 pub enum CrateKind {
     Cratesio(String),
     Git(String),
-    Local,
+    Local(String),
+}
+
+impl CrateKind {
+    fn full_string(&self) -> &String {
+        match self {
+            CrateKind::Cratesio(p) => p,
+            CrateKind::Git(p) => p,
+            CrateKind::Local(p) => p,
+        }
+    }
 }
 
 impl fmt::Display for CrateKind {
@@ -26,7 +36,7 @@ impl fmt::Display for CrateKind {
         match self {
             CrateKind::Cratesio(_) => write!(f, "crates.io"),
             CrateKind::Git(_) => write!(f, "git"),
-            CrateKind::Local => write!(f, "local"),
+            CrateKind::Local(_) => write!(f, "local"),
         }
     }
 }
@@ -98,7 +108,7 @@ impl CratesInfoContainer {
                                 let kind = if path.starts_with("http") {
                                     CrateKind::Git(path.to_string())
                                 } else {
-                                    CrateKind::Local
+                                    CrateKind::Local(path.to_string())
                                 };
 
                                 total.2 = kind;
@@ -138,14 +148,22 @@ impl CratesInfoContainer {
                     let response = attohttpc::get(url).send()?;
 
                     let res = response.json::<serde_json::Value>()?;
+                    let res = res
+                        .get("crate")
+                        .expect("field `<response>.crate` not found");
 
-                    let online = res["crate"]["newest_version"]
+                    // NOTE: `newest_version` is guranteed to exist
+                    let online = res["newest_version"]
                         .as_str()
-                        .expect("field `crate.newest_version` not found");
+                        .expect("field `<response>.crate.newest_version` not found");
 
-                    let repository = res["crate"]["repository"]
-                        .as_str()
-                        .expect("field `crate.repository` not found");
+                    let repository = match res.get("repository") {
+                        // we know `v` is string, so can unwrap
+                        Some(v) => v
+                            .as_str()
+                            .expect("`repository` field was expected to be string"),
+                        None => "-",
+                    };
 
                     krate = CrateInfo {
                         online: online.into(),
@@ -284,11 +302,8 @@ impl CratesInfoContainer {
                 krate.kind.to_string().bright_yellow()
             };
 
-            let (repo, repo_alignment) = match krate.kind {
-                CrateKind::Cratesio(repo) => (repo.bright_purple(), Alignment::Center),
-                CrateKind::Git(url) => (url.bright_purple(), Alignment::Center),
-                CrateKind::Local => ("-".bright_white(), Alignment::Center),
-            };
+            let (repo, repo_alignment) =
+                (krate.kind.full_string().bright_purple(), Alignment::Center);
 
             table.add_row(Row::new(vec![
                 TableCell::new_with_alignment(&krate.name.bright_blue(), 1, Alignment::Left),

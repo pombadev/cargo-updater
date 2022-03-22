@@ -148,11 +148,9 @@ impl CratesInfoContainer {
                         .expect("field `<response>.crate.newest_version` not found");
 
                     let repository = match res.get("repository") {
-                        // we know `v` is string, so can unwrap
-                        Some(v) => v
-                            .as_str()
-                            .expect("`repository` field was expected to be string"),
-                        None => "-",
+                        // Some crates (e.g. mdbook-katex) have `Null` repositories.
+                        Some(serde_json::Value::String(v)) => v,
+                        _ => "-",
                     };
 
                     CrateInfo {

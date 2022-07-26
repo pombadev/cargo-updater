@@ -5,7 +5,7 @@ use std::{
     thread,
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use colored::Colorize;
 use semver::Version;
 use term_table::{
@@ -14,7 +14,7 @@ use term_table::{
     Table, TableStyle,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub enum CrateKind {
     Cratesio(String),
     Git(String),
@@ -22,11 +22,9 @@ pub enum CrateKind {
 }
 
 impl CrateKind {
-    fn full_string(&self) -> &String {
+    const fn full_string(&self) -> &String {
         match self {
-            CrateKind::Cratesio(p) => p,
-            CrateKind::Git(p) => p,
-            CrateKind::Local(p) => p,
+            CrateKind::Cratesio(p) | CrateKind::Git(p) | CrateKind::Local(p) => p,
         }
     }
 }
@@ -41,8 +39,7 @@ impl fmt::Display for CrateKind {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct CrateInfo {
+pub struct CrateInfo {
     name: String,
     current: String,
     online: String,
@@ -54,9 +51,9 @@ impl CrateInfo {
         let inner = || -> Result<bool> {
             let max = Version::parse(self.online.as_str())?;
 
-            let curr = Version::parse(self.current.as_str())?;
+            let current = Version::parse(self.current.as_str())?;
 
-            Ok(curr < max)
+            Ok(current < max)
         };
 
         inner().unwrap_or(false) && self.is_standard()
@@ -67,17 +64,12 @@ impl CrateInfo {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct CratesInfoContainer {
+pub struct CratesInfoContainer {
     crates: Vec<CrateInfo>,
 }
 
 impl CratesInfoContainer {
-    pub(crate) fn new() -> Result<Self> {
-        Self::parse().context("Unable to parse installed version from stdio.")
-    }
-
-    pub(crate) fn parse() -> Result<CratesInfoContainer> {
+    pub(crate) fn parse() -> Result<Self> {
         let output = Command::new("cargo")
             .args(&["install", "--list"])
             .output()?;
@@ -131,19 +123,17 @@ impl CratesInfoContainer {
             })
             .collect::<Vec<CrateInfo>>();
 
-        Ok(CratesInfoContainer { crates })
+        Ok(Self { crates })
     }
 
-    pub(crate) fn get_upgradable(&self) -> Result<Self> {
+    pub(crate) fn get_upgradable() -> Result<Self> {
         let (tx, rx) = channel();
 
-        for item in Self::new()?.crates {
+        for item in Self::parse()?.crates {
             let tx = tx.clone();
 
             thread::spawn(move || -> Result<()> {
-                let krate;
-
-                if item.is_standard() {
+                let krate = if item.is_standard() {
                     let url = format!("https://crates.io/api/v1/crates/{}", item.name);
                     let response = attohttpc::get(url).send()?;
 
@@ -165,17 +155,17 @@ impl CratesInfoContainer {
                         None => "-",
                     };
 
-                    krate = CrateInfo {
+                    CrateInfo {
                         online: online.into(),
                         kind: CrateKind::Cratesio(repository.into()),
                         ..item
-                    };
+                    }
                 } else {
-                    krate = CrateInfo {
+                    CrateInfo {
                         online: "-".into(),
                         ..item
-                    };
-                }
+                    }
+                };
 
                 tx.send(krate)?;
 
@@ -190,8 +180,8 @@ impl CratesInfoContainer {
         Ok(Self { crates })
     }
 
-    pub(crate) fn update(&self) -> Result<()> {
-        let container = self.get_upgradable()?;
+    pub(crate) fn update() -> Result<()> {
+        let container = Self::get_upgradable()?;
 
         let (standard_crates, non_standard_crates) =
             container
@@ -208,7 +198,7 @@ impl CratesInfoContainer {
 
         if !non_standard_crates.is_empty() {
             println!(
-                "{}, cannot be updated, as they were not installed from crates.io.",
+                "Skipped updating binaries not installed from crates.io:\n{}",
                 non_standard_crates
                     .iter()
                     .map(|krate| krate.name.clone())
@@ -264,7 +254,7 @@ impl CratesInfoContainer {
         Ok(())
     }
 
-    pub(crate) fn list(&self) -> Result<()> {
+    pub(crate) fn list() -> Result<()> {
         let mut table = Table::new();
 
         table.style = TableStyle::blank();
@@ -282,7 +272,7 @@ impl CratesInfoContainer {
         // empty row
         // table.add_row(Row::new(vec![] as Vec<TableCell>));
 
-        let mut container = self.get_upgradable()?;
+        let mut container = Self::get_upgradable()?;
 
         // sort by name
         container.crates.sort_by(|a, b| a.name.cmp(&b.name));
@@ -315,7 +305,7 @@ impl CratesInfoContainer {
                 TableCell::new_with_alignment(online, 1, Alignment::Center),
                 TableCell::new_with_alignment(kind, 1, Alignment::Center),
                 TableCell::new_with_alignment(repo, 1, repo_alignment),
-            ]))
+            ]));
         }
 
         print!("{}", table.render());

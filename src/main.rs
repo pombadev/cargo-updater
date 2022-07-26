@@ -1,39 +1,39 @@
 use anyhow::{Context, Result};
-use clap::{crate_description, crate_name, crate_version, App, AppSettings, Arg, SubCommand};
+use clap::{App, Arg, Command};
 
 mod updater;
 
 fn main() -> Result<()> {
-    let app = App::new(crate_name!())
+    let app = App::new(env!("CARGO_PKG_NAME"))
         .bin_name("cargo")
         .subcommand(
-            SubCommand::with_name("updater")
-                .setting(AppSettings::ColorAuto)
-                .version(crate_version!())
-                .about(crate_description!())
+            Command::new("updater")
+                .version(env!("CARGO_PKG_VERSION"))
+                .about(env!("CARGO_PKG_DESCRIPTION"))
                 .args(&[
                     Arg::from_usage("-u --update 'Update upgradable crates'")
+                        .action(clap::ArgAction::SetTrue)
                         .conflicts_with("list"),
                     Arg::from_usage("-l --list 'List latest available version'")
+                        .action(clap::ArgAction::SetTrue)
                         .conflicts_with("update"),
                 ]),
         )
-        .setting(AppSettings::ArgRequiredElseHelp)
+        .arg_required_else_help(true)
         .get_matches();
 
-    if let Some(cmd) = app.subcommand {
-        let cmd = cmd.matches;
-
-        let container = updater::CratesInfoContainer::new()?;
-
-        if cmd.is_present("list") || cmd.args.is_empty() {
-            container
-                .list()
-                .context("Unable to list installed binaries.")?;
+    if let Some(("updater", cmd)) = app.subcommand() {
+        if let Some(list) = cmd.get_one::<bool>("list") {
+            if *list {
+                updater::CratesInfoContainer::list()
+                    .context("Unable to list installed binaries.")?;
+            }
         }
 
-        if cmd.is_present("update") {
-            container.update().context("Unable to run updater.")?;
+        if let Some(update) = cmd.get_one::<bool>("update") {
+            if *update {
+                updater::CratesInfoContainer::update().context("Unable to run updater.")?;
+            }
         }
     }
 

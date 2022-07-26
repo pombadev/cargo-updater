@@ -198,7 +198,7 @@ impl CratesInfoContainer {
 
         if !non_standard_crates.is_empty() {
             println!(
-                "Skipped updating binaries not installed from crates.io:\n{}",
+                "Skipped updating binaries not installed from crates.io: {}",
                 non_standard_crates
                     .iter()
                     .map(|krate| krate.name.clone())

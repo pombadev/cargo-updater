@@ -7,9 +7,9 @@
 ![License](https://img.shields.io/crates/l/cargo-updater)
 
 
-### Screenshot
+### Demo
 
-[![A screenshot](./screencast.svg)](./screencast.svg)
+[![A Demo](./demo.gif)](./demo.gif)
 
 ### Installation
 
@@ -22,3 +22,10 @@ cargo install cargo-updater
 ```shell script
 cargo updater
 ```
+
+### Similar projects
+
+| Crate | Dependencies | Simple | Pretty |
+| - | - | - | - |
+| [cargo-update](https://crates.io/crates/cargo-update) | 5 | ✅ | ❌ |
+| [cargo-upgrades](https://crates.io/crates/cargo-upgrades) | 22 | ❌ | ❌ |

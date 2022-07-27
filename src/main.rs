@@ -17,9 +17,9 @@ fn main() -> Result<()> {
                     Arg::from_usage("-l --list 'List latest available version'")
                         .action(clap::ArgAction::SetTrue)
                         .conflicts_with("update"),
-                ]),
+                ])
+                .arg_required_else_help(true),
         )
-        .arg_required_else_help(true)
         .get_matches();
 
     if let Some(("updater", cmd)) = app.subcommand() {

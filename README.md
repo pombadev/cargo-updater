@@ -24,19 +24,21 @@
 
 ### Installation
 
-```shell script
+```shell
 cargo install cargo-updater
 ```
 
 ### Usage
 
-```shell script
+```shell
 cargo updater
 ```
 
 ### Similar projects
 
-| Crate | Dependencies | Simple | Pretty <!-- beauty lies in the eyes of the beholder --> |
-| - | - | - | - |
-| [cargo-update](https://crates.io/crates/cargo-update) | 22 | ❌ | ❌ |
-| [cargo-upgrades](https://crates.io/crates/cargo-upgrades) | 5 | ✅ | ❌ |
+| Crate | Dependencies | Scope | Simple | Pretty <!-- beauty lies in the eyes of the beholder --> |
+| - | - | - | - | - |
+| [current project](https://crates.io/crates/cargo-updater) | 6 | Installed executables | ✅ | ✅ |
+| [cargo-update](https://crates.io/crates/cargo-update) | 22 | Installed executables | ❌ | ❌ |
+| [cargo-outdated](https://crates.io/crates/cargo-outdated) | 13 | Cargo project | ❌ | ❌ |
+| [cargo-upgrades](https://crates.io/crates/cargo-upgrades) | 5 | Cargo project | ✅ | ❌ |

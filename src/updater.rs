@@ -135,9 +135,9 @@ impl CratesInfoContainer {
             thread::spawn(move || -> Result<()> {
                 let krate = if item.is_standard() {
                     let url = format!("https://crates.io/api/v1/crates/{}", item.name);
-                    let response = attohttpc::get(url).send()?;
+                    let response = ureq::get(&url).call()?;
 
-                    let res = response.json::<serde_json::Value>()?;
+                    let res = response.into_json::<ureq::serde_json::Value>()?;
                     let res = res
                         .get("crate")
                         .expect("field `<response>.crate` not found");
@@ -149,7 +149,7 @@ impl CratesInfoContainer {
 
                     let repository = match res.get("repository") {
                         // Some crates (e.g. mdbook-katex) have `Null` repositories.
-                        Some(serde_json::Value::String(v)) => v,
+                        Some(ureq::serde_json::Value::String(v)) => v,
                         _ => "-",
                     };
 

@@ -9,7 +9,18 @@
 
 ### Demo
 
-[![A Demo](./demo.gif)](./demo.gif)
+[![Demo](./demos/demo.gif)](./demos/demo.gif)
+
+## Features
+
+> List installed, view available updates
+
+[![List installed](./demos/list.png)](./demos/list.png)
+
+> Install all upgradeable binaries
+
+[![Summary](./demos/final.png)](./demos/final.png)
+
 
 ### Installation
 
@@ -25,7 +36,7 @@ cargo updater
 
 ### Similar projects
 
-| Crate | Dependencies | Simple | Pretty |
+| Crate | Dependencies | Simple | Pretty <!-- beauty lies in the eyes of the beholder --> |
 | - | - | - | - |
-| [cargo-update](https://crates.io/crates/cargo-update) | 5 | ✅ | ❌ |
-| [cargo-upgrades](https://crates.io/crates/cargo-upgrades) | 22 | ❌ | ❌ |
+| [cargo-update](https://crates.io/crates/cargo-update) | 22 | ❌ | ❌ |
+| [cargo-upgrades](https://crates.io/crates/cargo-upgrades) | 5 | ✅ | ❌ |

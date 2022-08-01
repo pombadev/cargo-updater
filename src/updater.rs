@@ -5,7 +5,7 @@ use std::{
     thread,
 };
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use semver::Version;
 use term_table::{
@@ -13,6 +13,8 @@ use term_table::{
     table_cell::{Alignment, TableCell},
     Table, TableStyle,
 };
+use time::{format_description::well_known::Iso8601, OffsetDateTime};
+use ureq::serde_json::Value;
 
 #[derive(PartialEq)]
 pub enum CrateKind {
@@ -43,6 +45,7 @@ pub struct CrateInfo {
     name: String,
     current: String,
     online: String,
+    updated_at: String,
     kind: CrateKind,
 }
 
@@ -72,7 +75,12 @@ impl CratesInfoContainer {
     pub(crate) fn parse() -> Result<Self> {
         let output = Command::new("cargo")
             .args(&["install", "--list"])
-            .output()?;
+            .output()
+            .context("cargo was not found in $PATH")?;
+
+        if !output.status.success() {
+            bail!("`cargo install --list` not successful");
+        }
 
         let crates = std::str::from_utf8(&output.stdout[..])?
             .lines()
@@ -118,6 +126,7 @@ impl CratesInfoContainer {
                     kind,
                     name: name.into(),
                     current: current.into(),
+                    updated_at: String::with_capacity(0),
                     online: String::with_capacity(0),
                 }
             })
@@ -135,32 +144,50 @@ impl CratesInfoContainer {
             thread::spawn(move || -> Result<()> {
                 let krate = if item.is_standard() {
                     let url = format!("https://crates.io/api/v1/crates/{}", item.name);
-                    let response = ureq::get(&url).call()?;
 
-                    let res = response.into_json::<ureq::serde_json::Value>()?;
-                    let res = res
+                    let response = ureq::get(&url)
+                        .call()?
+                        .into_json::<ureq::serde_json::Value>()?;
+
+                    let response = response
                         .get("crate")
                         .expect("field `<response>.crate` not found");
 
                     // NOTE: `newest_version` is guranteed to exist
-                    let online = res["newest_version"]
+                    let online = response["newest_version"]
                         .as_str()
                         .expect("field `<response>.crate.newest_version` not found");
 
-                    let repository = match res.get("repository") {
+                    let repository = match response.get("repository") {
                         // Some crates (e.g. mdbook-katex) have `Null` repositories.
-                        Some(ureq::serde_json::Value::String(v)) => v,
+                        Some(Value::String(v)) => v,
                         _ => "-",
+                    };
+
+                    let updated_at = match response.get("updated_at") {
+                        Some(Value::String(val)) => {
+                            match OffsetDateTime::parse(val, &Iso8601::DEFAULT) {
+                                Ok(d) => {
+                                    let (year, month, day) = d.to_calendar_date();
+
+                                    format!("{day} {month} {year}")
+                                }
+                                Err(_) => "-".into(),
+                            }
+                        }
+                        _ => "-".into(),
                     };
 
                     CrateInfo {
                         online: online.into(),
                         kind: CrateKind::Cratesio(repository.into()),
+                        updated_at,
                         ..item
                     }
                 } else {
                     CrateInfo {
                         online: "-".into(),
+                        updated_at: "-".into(),
                         ..item
                     }
                 };
@@ -263,6 +290,7 @@ impl CratesInfoContainer {
             TableCell::new_with_alignment("Crate".bold().underline(), 1, Alignment::Left),
             TableCell::new_with_alignment("Current".bold().underline(), 1, Alignment::Center),
             TableCell::new_with_alignment("Latest".bold().underline(), 1, Alignment::Center),
+            TableCell::new_with_alignment("Updated".bold().underline(), 1, Alignment::Center),
             TableCell::new_with_alignment("Source".bold().underline(), 1, Alignment::Center),
             TableCell::new_with_alignment("Repository".bold().underline(), 1, Alignment::Center),
         ]));
@@ -295,18 +323,23 @@ impl CratesInfoContainer {
 
             table.add_row(Row::new(vec![
                 TableCell::new_with_alignment(&krate.name.bright_blue(), 1, Alignment::Left),
+                TableCell::new_with_alignment(&krate.current.bright_purple(), 1, Alignment::Center),
+                TableCell::new_with_alignment(online, 1, Alignment::Center),
                 TableCell::new_with_alignment(
-                    &krate.current.bright_magenta(),
+                    if krate.updated_at == "-" {
+                        krate.updated_at.normal()
+                    } else {
+                        krate.updated_at.bright_purple()
+                    },
                     1,
                     Alignment::Center,
                 ),
-                TableCell::new_with_alignment(online, 1, Alignment::Center),
                 TableCell::new_with_alignment(kind, 1, Alignment::Center),
                 TableCell::new_with_alignment(repo, 1, repo_alignment),
             ]));
         }
 
-        print!("{}", table.render());
+        print!("{}", table.render().trim());
 
         Ok(())
     }

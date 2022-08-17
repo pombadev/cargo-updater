@@ -16,7 +16,7 @@ use term_table::{
 use time::{format_description::well_known::Iso8601, OffsetDateTime};
 use ureq::serde_json::Value;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum CrateKind {
     Cratesio(String),
     Git(String),
@@ -26,7 +26,7 @@ pub enum CrateKind {
 impl CrateKind {
     const fn full_string(&self) -> &String {
         match self {
-            CrateKind::Cratesio(p) | CrateKind::Git(p) | CrateKind::Local(p) => p,
+            Self::Cratesio(p) | Self::Git(p) | Self::Local(p) => p,
         }
     }
 }
@@ -34,9 +34,9 @@ impl CrateKind {
 impl fmt::Display for CrateKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CrateKind::Cratesio(_) => write!(f, "crates.io"),
-            CrateKind::Git(_) => write!(f, "git"),
-            CrateKind::Local(_) => write!(f, "local"),
+            Self::Cratesio(_) => write!(f, "crates.io"),
+            Self::Git(_) => write!(f, "git"),
+            Self::Local(_) => write!(f, "local"),
         }
     }
 }

@@ -1,0 +1,10 @@
+{
+    "cSpell.words": [
+        "attohttpc",
+        "Cratesio",
+        "katex",
+        "mdbook",
+        "ureq"
+    ],
+    "rust-analyzer.checkOnSave.command": "clippy"
+}

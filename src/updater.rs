@@ -1,4 +1,5 @@
 use std::{
+    env::consts,
     fmt,
     process::{self, Command},
     sync::mpsc::channel,
@@ -146,6 +147,16 @@ impl CratesInfoContainer {
                     let url = format!("https://crates.io/api/v1/crates/{}", item.name);
 
                     let response = ureq::get(&url)
+                        .set(
+                            "User-Agent",
+                            &format!(
+                                "{}/{} ({}, {})",
+                                env!("CARGO_PKG_NAME"),
+                                env!("CARGO_PKG_VERSION"),
+                                consts::OS,
+                                consts::ARCH,
+                            ),
+                        )
                         .call()?
                         .into_json::<ureq::serde_json::Value>()?;
 

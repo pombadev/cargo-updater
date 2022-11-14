@@ -17,6 +17,9 @@ fn main() -> Result<()> {
                     Arg::from_usage("-l --list 'List latest available version'")
                         .action(ArgAction::SetTrue)
                         .conflicts_with("update"),
+                    Arg::from_usage("--locked 'When updating upgradable crates, use their Cargo.lock if packaged'")
+                        .action(ArgAction::SetTrue)
+                        .requires("update"),
                 ])
                 .arg_required_else_help(true),
         )
@@ -32,7 +35,14 @@ fn main() -> Result<()> {
 
         if let Some(update) = cmd.get_one::<bool>("update") {
             if *update {
-                updater::CratesInfoContainer::update().context("Unable to update")?;
+                if let Some(locked) = cmd.get_one::<bool>("locked") {
+                    if *locked {
+                        updater::CratesInfoContainer::locked_update()
+                            .context("Unable to update")?;
+                    }
+                } else {
+                    updater::CratesInfoContainer::update().context("Unable to update")?;
+                }
             }
         }
     }

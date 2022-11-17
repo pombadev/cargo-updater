@@ -17,7 +17,6 @@ use term_table::{
 use time::{format_description::well_known::Iso8601, OffsetDateTime};
 use ureq::serde_json::Value;
 
-#[derive(PartialEq, Eq)]
 pub enum CrateKind {
     Cratesio(String),
     Git(String),
@@ -60,10 +59,10 @@ impl CrateInfo {
             Ok(current < max)
         };
 
-        inner().unwrap_or(false) && self.is_standard()
+        inner().unwrap_or(false) && self.is_from_cratesio()
     }
 
-    pub(crate) fn is_standard(&self) -> bool {
+    pub(crate) fn is_from_cratesio(&self) -> bool {
         self.kind.to_string() == "crates.io"
     }
 }
@@ -75,7 +74,7 @@ pub struct CratesInfoContainer {
 impl CratesInfoContainer {
     pub(crate) fn parse() -> Result<Self> {
         let output = Command::new("cargo")
-            .args(&["install", "--list"])
+            .args(["install", "--list"])
             .output()
             .context("cargo was not found in $PATH")?;
 
@@ -143,7 +142,7 @@ impl CratesInfoContainer {
             let tx = tx.clone();
 
             thread::spawn(move || -> Result<()> {
-                let krate = if item.is_standard() {
+                let krate = if item.is_from_cratesio() {
                     let url = format!("https://crates.io/api/v1/crates/{}", item.name);
 
                     let response = ureq::get(&url)
@@ -162,12 +161,12 @@ impl CratesInfoContainer {
 
                     let response = response
                         .get("crate")
-                        .expect("field `<response>.crate` not found");
+                        .context("field `<response>.crate` not found")?;
 
                     // NOTE: `newest_version` is guranteed to exist
                     let online = response["newest_version"]
                         .as_str()
-                        .expect("field `<response>.crate.newest_version` not found");
+                        .context("field `<response>.crate.newest_version` not found")?;
 
                     let repository = match response.get("repository") {
                         // Some crates (e.g. mdbook-katex) have `Null` repositories.
@@ -216,34 +215,42 @@ impl CratesInfoContainer {
         Ok(Self { crates })
     }
 
-    pub(crate) fn update() -> Result<()> {
+    pub(crate) fn update(use_locked: &bool) -> Result<()> {
         let standard_crates = Self::get_standard_crates()?;
 
         if standard_crates.is_empty() {
-            println!(
-                "Nothing to update, run `cargo updater --list` to view installed and available version."
-            );
+            println!("Nothing to update, run with `--list` to view available updates.");
 
             return Ok(());
         }
 
-        Self::run_cargo_install(&standard_crates, &["--force"])?;
+        let mut flags = Vec::with_capacity(2);
 
-        Ok(())
-    }
+        flags.push("--force");
 
-    pub(crate) fn locked_update() -> Result<()> {
-        let standard_crates = Self::get_standard_crates()?;
-
-        if standard_crates.is_empty() {
-            println!(
-                "Nothing to update, run `cargo updater --list` to view installed and available version."
-            );
-
-            return Ok(());
+        if *use_locked {
+            flags.push("--locked")
         }
 
-        Self::run_cargo_install(&standard_crates, &["--force", "--locked"])?;
+        let mut cmd = Command::new("cargo");
+
+        let cmd = cmd.arg("install").args(flags).args(standard_crates);
+
+        let mut child = cmd.spawn()?;
+
+        let status = child.wait()?;
+
+        if !status.success() {
+            match status.code() {
+                Some(code) => {
+                    eprintln!("Exited with status code: {}", code);
+                    process::exit(code);
+                }
+                None => {
+                    bail!("Running `cargo install` was not successful.");
+                }
+            };
+        }
 
         Ok(())
     }
@@ -258,7 +265,7 @@ impl CratesInfoContainer {
                 .fold((vec![], vec![]), |mut total, krate| {
                     if krate.is_upgradable() {
                         total.0.push(krate.name.clone());
-                    } else if !krate.is_standard() {
+                    } else if !krate.is_from_cratesio() {
                         total.1.push(krate.name.clone());
                     }
                     total
@@ -271,45 +278,6 @@ impl CratesInfoContainer {
             );
         }
         Ok(standard_crates)
-    }
-
-    fn run_cargo_install(standard_crates: &Vec<String>, flags: &[&str]) -> Result<()> {
-        let mut cmd = Command::new("cargo");
-
-        let cmd = cmd.arg("install").args(flags).args(standard_crates);
-
-        let mut child = cmd.spawn().unwrap_or_else(|_| {
-            eprintln!(
-                "`cargo install {} {:?}` failed to start",
-                flags.join(" "),
-                standard_crates
-            );
-            process::exit(1);
-        });
-
-        let status = child.wait().unwrap_or_else(|_| {
-            eprintln!("failed to wait process status.");
-            process::exit(1);
-        });
-
-        Self::handle_status_code(status);
-
-        Ok(())
-    }
-
-    fn handle_status_code(status: process::ExitStatus) {
-        if !status.success() {
-            match status.code() {
-                Some(code) => {
-                    eprintln!("Exited with status code: {}", code);
-                    process::exit(code);
-                }
-                None => {
-                    eprintln!("Running `cargo install` was not successful.");
-                    process::exit(1);
-                }
-            };
-        }
     }
 
     pub(crate) fn list() -> Result<()> {
@@ -339,13 +307,13 @@ impl CratesInfoContainer {
         for krate in container.crates {
             let online = if krate.is_upgradable() {
                 krate.online.bright_red()
-            } else if krate.is_standard() {
+            } else if krate.is_from_cratesio() {
                 krate.online.bright_green()
             } else {
                 krate.online.normal()
             };
 
-            let kind = if krate.is_standard() {
+            let kind = if krate.is_from_cratesio() {
                 krate.kind.to_string().bright_cyan()
             } else {
                 krate.kind.to_string().bright_yellow()

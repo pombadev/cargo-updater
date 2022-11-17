@@ -217,32 +217,7 @@ impl CratesInfoContainer {
     }
 
     pub(crate) fn update() -> Result<()> {
-        let container = Self::get_upgradable()?;
-
-        let (standard_crates, non_standard_crates) =
-            container
-                .crates
-                .iter()
-                .fold((vec![], vec![]), |mut total, krate| {
-                    if krate.is_upgradable() {
-                        total.0.push(krate);
-                    } else if !krate.is_standard() {
-                        total.1.push(krate);
-                    }
-                    total
-                });
-
-        if !non_standard_crates.is_empty() {
-            println!(
-                "Skipped updating binaries not installed from crates.io: {}",
-                non_standard_crates
-                    .iter()
-                    .map(|krate| krate.name.clone())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-                    .bold()
-            );
-        }
+        let standard_crates = Self::get_standard_crates()?;
 
         if standard_crates.is_empty() {
             println!(
@@ -252,19 +227,62 @@ impl CratesInfoContainer {
             return Ok(());
         }
 
-        let standard_crates = standard_crates
-            .iter()
-            .map(|krate| krate.name.clone())
-            .collect::<Vec<_>>();
+        Self::run_cargo_install(&standard_crates, &["--force"])?;
 
+        Ok(())
+    }
+
+    pub(crate) fn locked_update() -> Result<()> {
+        let standard_crates = Self::get_standard_crates()?;
+
+        if standard_crates.is_empty() {
+            println!(
+                "Nothing to update, run `cargo updater --list` to view installed and available version."
+            );
+
+            return Ok(());
+        }
+
+        Self::run_cargo_install(&standard_crates, &["--force", "--locked"])?;
+
+        Ok(())
+    }
+
+    fn get_standard_crates() -> Result<Vec<String>> {
+        let container = Self::get_upgradable()?;
+
+        let (standard_crates, non_standard_crates) =
+            container
+                .crates
+                .iter()
+                .fold((vec![], vec![]), |mut total, krate| {
+                    if krate.is_upgradable() {
+                        total.0.push(krate.name.clone());
+                    } else if !krate.is_standard() {
+                        total.1.push(krate.name.clone());
+                    }
+                    total
+                });
+
+        if !non_standard_crates.is_empty() {
+            println!(
+                "Skipped updating binaries not installed from crates.io: {}",
+                non_standard_crates.join(", ").bold()
+            );
+        }
+        Ok(standard_crates)
+    }
+
+    fn run_cargo_install(standard_crates: &Vec<String>, flags: &[&str]) -> Result<()> {
         let mut cmd = Command::new("cargo");
 
-        let cmd = cmd.args(&["install", "--force"]).args(&standard_crates);
+        let cmd = cmd.arg("install").args(flags).args(standard_crates);
 
         let mut child = cmd.spawn().unwrap_or_else(|_| {
             eprintln!(
-                "`cargo install --force {:?}` failed to start",
-                &standard_crates
+                "`cargo install {} {:?}` failed to start",
+                flags.join(" "),
+                standard_crates
             );
             process::exit(1);
         });
@@ -274,6 +292,12 @@ impl CratesInfoContainer {
             process::exit(1);
         });
 
+        Self::handle_status_code(status);
+
+        Ok(())
+    }
+
+    fn handle_status_code(status: process::ExitStatus) {
         if !status.success() {
             match status.code() {
                 Some(code) => {
@@ -286,8 +310,6 @@ impl CratesInfoContainer {
                 }
             };
         }
-
-        Ok(())
     }
 
     pub(crate) fn list() -> Result<()> {

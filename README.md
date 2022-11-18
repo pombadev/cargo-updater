@@ -38,7 +38,7 @@ cargo updater
 
 | Crate | Dependencies | Scope | Simple | Pretty <!-- beauty lies in the eyes of the beholder --> |
 | - | - | - | - | - |
-| [current project](https://crates.io/crates/cargo-updater) | 6 | Installed executables | ✅ | ✅ |
-| [cargo-update](https://crates.io/crates/cargo-update) | 22 | Installed executables | ❌ | ❌ |
+| [this project](https://crates.io/crates/cargo-updater) | 6 | Installed executables | ✅ | ✅ |
+| [cargo-update](https://crates.io/crates/cargo-update) | 17 | Installed executables | ❌ | ❌ |
 | [cargo-outdated](https://crates.io/crates/cargo-outdated) | 13 | Cargo project | ❌ | ❌ |
 | [cargo-upgrades](https://crates.io/crates/cargo-upgrades) | 5 | Cargo project | ✅ | ❌ |

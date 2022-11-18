@@ -222,7 +222,14 @@ impl CratesInfoContainer {
     }
 
     pub(crate) fn update(use_locked: &bool) -> Result<()> {
-        let standard_crates = Self::get_standard_crates()?;
+        let (standard_crates, non_standard_crates) = Self::get_standard_crates()?;
+
+        if !non_standard_crates.is_empty() {
+            println!(
+                "Skipped updating binaries not installed from crates.io: {}",
+                non_standard_crates.join(", ").bold()
+            );
+        }
 
         if standard_crates.is_empty() {
             println!("Nothing to update, run with `--list` to view available updates.");
@@ -261,29 +268,22 @@ impl CratesInfoContainer {
         Ok(())
     }
 
-    fn get_standard_crates() -> Result<Vec<String>> {
+    fn get_standard_crates() -> Result<(Vec<String>, Vec<String>)> {
         let container = Self::get_upgradable()?;
 
-        let (standard_crates, non_standard_crates) =
-            container
-                .crates
-                .iter()
-                .fold((vec![], vec![]), |mut total, krate| {
-                    if krate.is_upgradable() {
-                        total.0.push(krate.name.clone());
-                    } else if !krate.is_from_cratesio() {
-                        total.1.push(krate.name.clone());
-                    }
-                    total
-                });
+        let crates = container
+            .crates
+            .iter()
+            .fold((vec![], vec![]), |mut total, krate| {
+                if krate.is_upgradable() {
+                    total.0.push(krate.name.clone());
+                } else if !krate.is_from_cratesio() {
+                    total.1.push(krate.name.clone());
+                }
+                total
+            });
 
-        if !non_standard_crates.is_empty() {
-            println!(
-                "Skipped updating binaries not installed from crates.io: {}",
-                non_standard_crates.join(", ").bold()
-            );
-        }
-        Ok(standard_crates)
+        Ok(crates)
     }
 
     pub(crate) fn list() -> Result<()> {

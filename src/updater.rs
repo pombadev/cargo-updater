@@ -51,15 +51,19 @@ pub struct CrateInfo {
 
 impl CrateInfo {
     pub(crate) fn is_upgradable(&self) -> bool {
-        let inner = || -> Result<bool> {
-            let max = Version::parse(self.online.as_str())?;
+        if self.is_from_cratesio() {
+            let inner = || -> Result<bool> {
+                let max = Version::parse(&self.online)?;
 
-            let current = Version::parse(self.current.as_str())?;
+                let current = Version::parse(&self.current)?;
 
-            Ok(current < max)
-        };
+                Ok(current < max)
+            };
 
-        inner().unwrap_or(false) && self.is_from_cratesio()
+            inner().unwrap_or(false)
+        } else {
+            false
+        }
     }
 
     pub(crate) fn is_from_cratesio(&self) -> bool {
@@ -87,7 +91,7 @@ impl CratesInfoContainer {
             .filter(|line| !line.starts_with(char::is_whitespace))
             .map(|line| {
                 let krate = line.split(' ').enumerate().fold(
-                    ("", "", CrateKind::Cratesio("".into())),
+                    ("", "", CrateKind::Cratesio(String::new())),
                     |mut total, (index, item)| {
                         match index {
                             // crate's name
@@ -141,6 +145,8 @@ impl CratesInfoContainer {
         for item in Self::parse()?.crates {
             let tx = tx.clone();
 
+            let dash = String::from("-");
+
             thread::spawn(move || -> Result<()> {
                 let krate = if item.is_from_cratesio() {
                     let url = format!("https://crates.io/api/v1/crates/{}", item.name);
@@ -171,7 +177,7 @@ impl CratesInfoContainer {
                     let repository = match response.get("repository") {
                         // Some crates (e.g. mdbook-katex) have `Null` repositories.
                         Some(Value::String(v)) => v,
-                        _ => "-",
+                        _ => &dash,
                     };
 
                     let updated_at = match response.get("updated_at") {
@@ -182,10 +188,10 @@ impl CratesInfoContainer {
 
                                     format!("{day} {month} {year}")
                                 }
-                                Err(_) => "-".into(),
+                                Err(_) => dash.clone(),
                             }
                         }
-                        _ => "-".into(),
+                        _ => dash.clone(),
                     };
 
                     CrateInfo {
@@ -196,8 +202,8 @@ impl CratesInfoContainer {
                     }
                 } else {
                     CrateInfo {
-                        online: "-".into(),
-                        updated_at: "-".into(),
+                        online: dash.clone(),
+                        updated_at: dash.clone(),
                         ..item
                     }
                 };
@@ -229,7 +235,7 @@ impl CratesInfoContainer {
         flags.push("--force");
 
         if *use_locked {
-            flags.push("--locked")
+            flags.push("--locked");
         }
 
         let mut cmd = Command::new("cargo");

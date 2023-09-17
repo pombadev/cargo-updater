@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::{Arg, ArgAction, Command};
 
 mod updater;
@@ -53,7 +53,8 @@ fn main() -> Result<()> {
             }
         }
         _ => {
-            unreachable!()
+            // happens when the binary is invoked directly not through cargo
+            bail!("Invoking directly is not supported, please invoke it with cargo.")
         }
     }
 
